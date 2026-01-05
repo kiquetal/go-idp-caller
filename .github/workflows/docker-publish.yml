@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 env:
@@ -47,36 +49,44 @@ jobs:
         run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image (AMD64)
+        id: build-amd64
         uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.datetime }}-amd64
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=amd64
+          cache-to: type=gha,mode=max,scope=amd64
           provenance: false
 
       - name: Build and push Docker image (ARM64)
+        id: build-arm64
         uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/arm64
+          push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.datetime }}-arm64
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=arm64
+          cache-to: type=gha,mode=max,scope=arm64
           provenance: false
 
       - name: Create and push multi-arch manifest
         run: |
+          # Wait a bit to ensure images are fully available in registry
+          sleep 5
+          
+          # Create latest manifest
           docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64 \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64
           
+          # Create timestamp manifest
           docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.datetime }} \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.datetime }}-amd64 \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.datetime }}-arm64
