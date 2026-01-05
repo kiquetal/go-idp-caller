@@ -162,7 +162,7 @@ X-Last-Updated: 2026-01-05T10:30:00Z
 
 ### For Merged Endpoint (`/.well-known/jwks.json`)
 
-The service uses the **minimum cache_duration** across all IDPs to be conservative:
+The service uses the **minimum cache_duration** across all IDPs (after each IDP's cache_duration has been determined):
 
 ```go
 // From internal/server/server.go
@@ -184,20 +184,54 @@ func (s *Server) handleGetMergedJWKS(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-**Example:**
+**How it works:**
+
+1. **Each IDP determines its own cache_duration:**
+   ```
+   Auth0:     min(config: 900, idp_max_age: 86400) = 900
+   Okta:      min(config: 1800, idp_max_age: 3600) = 1800  
+   Keycloak:  min(config: 900, idp_max_age: 300) = 300
+   ```
+
+2. **Merged endpoint uses minimum of these:**
+   ```
+   min(900, 1800, 300) = 300
+   ```
+
+3. **Result:** Merged endpoint returns `Cache-Control: max-age=300`
+
+**Why?** 
+- Each IDP has **different** cache_duration based on its rotation schedule
+- Keycloak rotates every 5 minutes (300s), so it uses 300
+- Auth0 is stable (24h), so it uses its config (900)
+- Merged endpoint must use the **shortest** (300) to ensure clients get fresh Keycloak keys
+
+**Example with different IDP behaviors:**
 ```yaml
 idps:
   - name: "auth0"
-    cache_duration: 900     # 15 minutes
+    cache_duration: 900     # Config: 15 min
+    # IDP returns: max-age=86400 (24h)
+    # Uses: min(900, 86400) = 900 ✅
+
   - name: "okta"
-    cache_duration: 1800    # 30 minutes
+    cache_duration: 1800    # Config: 30 min
+    # IDP returns: max-age=3600 (1h)
+    # Uses: min(1800, 3600) = 1800 ✅
+    
   - name: "keycloak"
-    cache_duration: 600     # 10 minutes
+    cache_duration: 900     # Config: 15 min
+    # IDP returns: max-age=300 (5 min!)
+    # Uses: min(900, 300) = 300 ✅
 ```
 
-**Result:** Merged endpoint uses `max-age=600` (the minimum)
+**Individual endpoints:**
+- `GET /jwks/auth0` → `Cache-Control: max-age=900`
+- `GET /jwks/okta` → `Cache-Control: max-age=1800`
+- `GET /jwks/keycloak` → `Cache-Control: max-age=300`
 
-**Why?** If Keycloak rotates keys every 10 minutes, clients need fresh data sooner.
+**Merged endpoint:**
+- `GET /.well-known/jwks.json` → `Cache-Control: max-age=300` (uses minimum!)
 
 ### For Individual IDP Endpoints (`/jwks/{idp}`)
 
