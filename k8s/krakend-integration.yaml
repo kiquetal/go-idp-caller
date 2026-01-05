@@ -1,0 +1,36 @@
+# Example KrakenD configuration snippet for JWT validation using this service
+# This shows how to configure KrakenD to use the IDP caller service for JWKS
+
+# In your krakend.json, add this to the extra_config section of endpoints that need JWT validation:
+
+# {
+#   "endpoint": "/api/protected",
+#   "method": "GET",
+#   "extra_config": {
+#     "auth/validator": {
+#       "alg": "RS256",
+#       "jwk_url": "http://idp-caller.default.svc.cluster.local/jwks/auth0",
+#       "cache": true,
+#       "cache_duration": 900,
+#       "disable_jwk_security": false,
+#       "roles_key": "roles",
+#       "roles": ["user", "admin"]
+#     }
+#   },
+#   "backend": [
+#     {
+#       "url_pattern": "/protected",
+#       "host": ["http://backend-service"]
+#     }
+#   ]
+# }
+
+# For multiple IDPs, you can have different endpoints:
+# - http://idp-caller.default.svc.cluster.local/jwks/auth0
+# - http://idp-caller.default.svc.cluster.local/jwks/okta
+# - http://idp-caller.default.svc.cluster.local/jwks/keycloak
+
+# You can also check the status of each IDP:
+# - http://idp-caller.default.svc.cluster.local/status/auth0
+# - http://idp-caller.default.svc.cluster.local/status (all IDPs)
+

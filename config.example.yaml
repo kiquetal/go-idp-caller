@@ -1,0 +1,43 @@
+# Example Configuration for Production IDPs
+
+# Copy this file to config.yaml and update with your actual IDP URLs
+
+server:
+  port: 8080
+  host: "0.0.0.0"
+
+idps:
+  # Auth0 Example
+  - name: "auth0-prod"
+    url: "https://your-tenant.auth0.com/.well-known/jwks.json"
+    refresh_interval: 3600  # 1 hour
+
+  # Okta Example
+  - name: "okta-prod"
+    url: "https://your-domain.okta.com/oauth2/default/v1/keys"
+    refresh_interval: 3600
+
+  # Keycloak Example
+  - name: "keycloak-prod"
+    url: "https://your-keycloak.example.com/auth/realms/master/protocol/openid-connect/certs"
+    refresh_interval: 3600
+
+  # Azure AD Example
+  - name: "azure-ad"
+    url: "https://login.microsoftonline.com/common/discovery/v2.0/keys"
+    refresh_interval: 3600
+
+  # Google Example
+  - name: "google"
+    url: "https://www.googleapis.com/oauth2/v3/certs"
+    refresh_interval: 3600
+
+  # Custom IDP Example
+  - name: "custom-idp"
+    url: "https://idp.example.com/.well-known/jwks.json"
+    refresh_interval: 1800  # 30 minutes
+
+logging:
+  level: "info"  # Options: debug, info, warn, error
+  format: "json"  # Options: json, text
+

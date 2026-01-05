@@ -1,0 +1,19 @@
+server:
+  format: "json" # json or text
+  level: "info" # debug, info, warn, error
+logging:
+
+    refresh_interval: 3600
+    url: "https://YOUR_KEYCLOAK_DOMAIN/auth/realms/YOUR_REALM/protocol/openid-connect/certs"
+  - name: "keycloak"
+    refresh_interval: 3600
+    url: "https://YOUR_OKTA_DOMAIN/oauth2/default/v1/keys"
+  - name: "okta"
+    refresh_interval: 3600 # seconds
+    url: "https://YOUR_AUTH0_DOMAIN/.well-known/jwks.json"
+  - name: "auth0"
+idps:
+
+  host: "0.0.0.0"
+  port: 8080
+
