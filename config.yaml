@@ -6,17 +6,17 @@ idps:
   - name: "auth0"
     url: "https://YOUR_AUTH0_DOMAIN/.well-known/jwks.json"
     refresh_interval: 3600 # seconds
-    max_keys: 10 # maximum number of keys to maintain (standard default: 10)
+    max_keys: 5 # maximum number of keys to maintain (standard default: 10)
     cache_duration: 900 # cache time in seconds (default: 900 = 15 min)
   - name: "okta"
     url: "https://YOUR_OKTA_DOMAIN/oauth2/default/v1/keys"
     refresh_interval: 3600
-    max_keys: 10
+    max_keys: 5
     cache_duration: 900
   - name: "keycloak"
     url: "https://YOUR_KEYCLOAK_DOMAIN/auth/realms/YOUR_REALM/protocol/openid-connect/certs"
     refresh_interval: 3600
-    max_keys: 10
+    max_keys: 5
     cache_duration: 900
 
 logging:

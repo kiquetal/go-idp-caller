@@ -1,26 +1,40 @@
-# IDP JWS/JWKS Caller Service
+# IDP JWKS Caller Service
 
-A Go service that fetches and maintains JSON Web Key Sets (JWKS) from multiple Identity Providers (IDPs). It uses goroutines to keep the JWKS updated periodically and provides a REST API for consumption by API gateways like KrakenD.
+A Go service that fetches and maintains JSON Web Key Sets (JWKS) from multiple Identity Providers (IDPs). Features independent goroutines per IDP, intelligent caching, and a merged JWKS endpoint for seamless multi-IDP JWT validation.
 
-> **🚀 Quick Start:** New to this project? Check out [QUICKSTART.md](QUICKSTART.md) for a 5-minute setup guide!
+## 📚 Documentation
+
+- **[MERGED_JWKS_GUIDE.md](MERGED_JWKS_GUIDE.md)** - Using the merged JWKS endpoint (recommended for multi-IDP)
+- **[CONFIGURATION.md](CONFIGURATION.md)** - Complete configuration reference and caching strategy
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System design and how it works
+- **[KRAKEND_INTEGRATION.md](KRAKEND_INTEGRATION.md)** - Integrating with KrakenD API Gateway
+
+## 🚀 Quick Start
+
+```bash
+# 1. Configure your IDPs
+cp config.example.yaml config.yaml
+# Edit config.yaml with your IDP URLs
+
+# 2. Run locally
+go run main.go
+
+# 3. Test the merged endpoint
+curl http://localhost:8080/.well-known/jwks.json
+```
 
 ## Features
 
-- ✅ Fetch JWKS from multiple IDP endpoints
-- ✅ Periodic background updates using goroutines
-- ✅ Detailed logging with timestamps for each update
-- ✅ Track last update time and update count per IDP
-- ✅ REST API for retrieving JWKS
-- ✅ Merged JWKS endpoint combining all IDPs (JOSE JWT compatible)
-- ✅ **Per-IDP key limits (standard: 10 keys per IDP)**
-- ✅ **Independent cache control per IDP**
-- ✅ Health check endpoint
-- ✅ Status endpoint with metadata
-- ✅ Kubernetes ready with deployment manifests
-- ✅ KrakenD integration support
-- ✅ Graceful shutdown
-- ✅ Thread-safe concurrent access
-- ✅ **Memory protection against excessive keys**
+- ✅ **Merged JWKS endpoint** - Single `/.well-known/jwks.json` for all IDPs
+- ✅ **Independent goroutines** - Each IDP fetches on its own schedule
+- ✅ **Intelligent caching** - Respects IDP's Cache-Control headers
+- ✅ **Per-IDP configuration** - Different refresh intervals and cache settings
+- ✅ **Memory protection** - Configurable key limits per IDP
+- ✅ **Kubernetes ready** - Deployment manifests included
+- ✅ **Production logging** - Structured JSON logs with full metadata
+- ✅ **Health & status endpoints** - Monitor each IDP independently
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for complete system design.
 
 ## API Endpoints
 

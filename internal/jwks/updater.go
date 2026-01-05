@@ -113,8 +113,6 @@ func (u *Updater) determineCacheDuration(idpMaxAge int) int {
 
 // fetch retrieves JWKS from the IDP endpoint and returns the data plus cache duration from headers
 func (u *Updater) fetch() (*JWKS, int, error) {
-// fetch retrieves JWKS from the IDP endpoint and returns the data plus cache duration from headers
-func (u *Updater) fetch() (*JWKS, int, error) {
 	req, err := http.NewRequest("GET", u.config.URL, nil)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to create request: %w", err)
