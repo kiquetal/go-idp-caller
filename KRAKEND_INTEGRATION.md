@@ -11,6 +11,7 @@ The IDP JWS Caller service acts as a centralized JWKS provider for KrakenD, offe
 - **Monitoring**: Track last update times and errors for each IDP
 - **High Availability**: Deploy as a Kubernetes service with multiple replicas
 - **Performance**: KrakenD can cache JWKS locally, reducing latency
+- **JOSE JWT Compatible**: Provides merged JWKS endpoint for all IDPs
 
 ## Architecture
 
@@ -19,7 +20,7 @@ The IDP JWS Caller service acts as a centralized JWKS provider for KrakenD, offe
               ↓
       [IDP Caller Service]
               ↓
-      [Multiple IDPs: Auth0, Okta, etc.]
+      [Multiple IDPs: Auth0, Okta, Keycloak, etc.]
 ```
 
 ## Kubernetes Deployment
@@ -42,6 +43,40 @@ The service will be available at: `http://idp-caller.default.svc.cluster.local`
 ### 2. Configure KrakenD
 
 Add JWT validation to your KrakenD configuration (`krakend.json`):
+
+#### Merged JWKS (All IDPs - Recommended for JOSE JWT)
+
+Use this when you want to accept tokens from **multiple IDPs** and let the JWT library automatically find the correct key by `kid`:
+
+```json
+{
+  "$schema": "https://www.krakend.io/schema/v3.json",
+  "version": 3,
+  "endpoints": [
+    {
+      "endpoint": "/api/protected",
+      "method": "GET",
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://idp-caller.default.svc.cluster.local/.well-known/jwks.json",
+          "cache": true,
+          "cache_duration": 900,
+          "disable_jwk_security": false
+        }
+      },
+      "backend": [
+        {
+          "url_pattern": "/protected",
+          "host": ["http://backend-service"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+**This endpoint returns all keys from all configured IDPs in a single array**, making it compatible with JOSE JWT libraries that expect the standard JWKS format.
 
 #### Single IDP Example
 
@@ -169,15 +204,21 @@ Add JWT validation to your KrakenD configuration (`krakend.json`):
 | Endpoint | Description | Use Case |
 |----------|-------------|----------|
 | `GET /health` | Health check | Kubernetes probes |
-| `GET /jwks` | All JWKS | Multiple IDPs at once |
-| `GET /jwks/{idp}` | Specific IDP JWKS | KrakenD configuration |
+| `GET /.well-known/jwks.json` | **Merged JWKS (all IDPs)** | **JOSE JWT, KrakenD (multi-IDP)** |
+| `GET /jwks.json` | **Merged JWKS (all IDPs)** | **Alternative merged endpoint** |
+| `GET /jwks/all` | **Merged JWKS (all IDPs)** | **Alternative merged endpoint** |
+| `GET /jwks` | All JWKS by IDP name | Debugging, custom use |
+| `GET /jwks/{idp}` | Specific IDP JWKS | KrakenD (single IDP) |
 | `GET /status` | All IDP status | Monitoring |
 | `GET /status/{idp}` | Specific IDP status | Debugging |
 
 ### Example Requests
 
 ```bash
-# Get JWKS for Auth0
+# Get merged JWKS from all IDPs (JOSE JWT format)
+curl http://idp-caller.default.svc.cluster.local/.well-known/jwks.json
+
+# Get JWKS for specific IDP (Auth0)
 curl http://idp-caller.default.svc.cluster.local/jwks/auth0
 
 # Check last update time

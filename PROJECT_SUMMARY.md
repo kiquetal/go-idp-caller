@@ -47,6 +47,7 @@ go-idp-caller/
 - Supports Auth0, Okta, Keycloak, Azure AD, Google, and custom IDPs
 - HTTP client with 10-second timeout
 - Proper error handling and retry logic
+- **Merged JWKS endpoint combining all IDPs** (JOSE JWT compatible)
 
 ### 2. **Goroutine-Based Background Updates**
 - Each IDP has its own dedicated goroutine
@@ -71,11 +72,15 @@ go-idp-caller/
 
 ### 5. **REST API**
 - `GET /health` - Health check endpoint
-- `GET /jwks` - All JWKS from all IDPs
+- `GET /.well-known/jwks.json` - **Merged JWKS (all IDPs combined)**
+- `GET /jwks.json` - **Merged JWKS (alternative path)**
+- `GET /jwks/all` - **Merged JWKS (explicit path)**
+- `GET /jwks` - All JWKS separated by IDP name
 - `GET /jwks/{idp}` - JWKS for specific IDP
-- `GET /status` - Status of all IDPs
+- `GET /status` - Status of all IDPs with metadata
 - `GET /status/{idp}` - Status of specific IDP
 - Logging middleware for all requests
+- Cache-Control headers for merged endpoints
 
 ### 6. **Kubernetes Ready**
 - Complete deployment manifests
@@ -263,6 +268,40 @@ make deps           # Download dependencies
 
 ## 📝 API Response Examples
 
+### Merged JWKS Response (All IDPs Combined)
+```json
+{
+  "keys": [
+    {
+      "kid": "ZWliPr4t9ciW0FS",
+      "kty": "RSA",
+      "alg": "RS256",
+      "use": "sig",
+      "e": "AQAB",
+      "n": "x5kvoAVGraJQ0xDOihwr..."
+    },
+    {
+      "kid": "qjPcUaB_zp5mw_GBBR2Cy",
+      "kty": "RSA",
+      "alg": "RS256",
+      "use": "sig",
+      "e": "AQAB",
+      "n": "yooxUH7Ky4X3QopBi7oX...",
+      "x5t": "lxzRNmKF8gNtzdWu15Ysb3EnpLo",
+      "x5c": ["MIID..."]
+    },
+    {
+      "kid": "ToYW17Cf6E7EcbFl4-8RXBifujtWqQuW3DDG9wPFjCo",
+      "kty": "RSA",
+      "alg": "RS256",
+      "use": "sig",
+      "e": "AQAB",
+      "n": "0jGahJ59tAt4jih24d..."
+    }
+  ]
+}
+```
+
 ### Status Response
 ```json
 {
@@ -287,7 +326,23 @@ make deps           # Download dependencies
 
 ## 🔗 KrakenD Integration
 
-Use in KrakenD configuration:
+### Merged JWKS (All IDPs - Recommended)
+Use this for JOSE JWT libraries that accept tokens from multiple IDPs:
+```json
+{
+  "extra_config": {
+    "auth/validator": {
+      "alg": "RS256",
+      "jwk_url": "http://idp-caller.default.svc.cluster.local/.well-known/jwks.json",
+      "cache": true,
+      "cache_duration": 900
+    }
+  }
+}
+```
+
+### Single IDP
+Use this for restricting to a specific IDP:
 ```json
 {
   "extra_config": {
@@ -329,8 +384,12 @@ Use in KrakenD configuration:
 
 ## 📚 Documentation Files
 
+## 📚 Documentation Files
+
 - **README.md**: Complete usage documentation
 - **KRAKEND_INTEGRATION.md**: Detailed KrakenD integration guide
+- **MERGED_JWKS_GUIDE.md**: Comprehensive guide for merged JWKS endpoint
+- **PROJECT_SUMMARY.md**: This file - complete project overview
 - **config.example.yaml**: Example configuration with all options
 - **k8s/**: Kubernetes deployment examples
 
@@ -338,10 +397,12 @@ Use in KrakenD configuration:
 
 You now have a fully functional, production-ready Go service that:
 - ✅ Fetches JWKS from multiple IDPs
+- ✅ Merges all keys into JOSE JWT compatible format
 - ✅ Uses goroutines for background updates
 - ✅ Provides detailed logging with timestamps
 - ✅ Exposes REST API for consumption
-- ✅ Works seamlessly with KrakenD
+- ✅ Standard `.well-known/jwks.json` endpoint
+- ✅ Works seamlessly with KrakenD and JOSE JWT libraries
 - ✅ Deploys easily to Kubernetes
 - ✅ Built with Go 1.24
 

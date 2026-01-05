@@ -10,32 +10,74 @@ idps:
   # Auth0 Example
   - name: "auth0-prod"
     url: "https://your-tenant.auth0.com/.well-known/jwks.json"
-    refresh_interval: 3600  # 1 hour
+    refresh_interval: 3600  # 1 hour - how often to fetch from IDP
+    max_keys: 10  # Standard: maintain max 10 keys per IDP (protects memory)
+    cache_duration: 900  # 15 minutes - how long clients should cache
 
   # Okta Example
   - name: "okta-prod"
     url: "https://your-domain.okta.com/oauth2/default/v1/keys"
     refresh_interval: 3600
+    max_keys: 10
+    cache_duration: 900
 
   # Keycloak Example
   - name: "keycloak-prod"
-    url: "https://your-keycloak.example.com/auth/realms/master/protocol/openid-connect/certs"
+    url: "https://your-keycloak.example.com/realms/master/protocol/openid-connect/certs"
     refresh_interval: 3600
+    max_keys: 10
+    cache_duration: 900
 
   # Azure AD Example
   - name: "azure-ad"
     url: "https://login.microsoftonline.com/common/discovery/v2.0/keys"
     refresh_interval: 3600
+    max_keys: 10
+    cache_duration: 900
 
   # Google Example
   - name: "google"
     url: "https://www.googleapis.com/oauth2/v3/certs"
     refresh_interval: 3600
+    max_keys: 10
+    cache_duration: 900
 
-  # Custom IDP Example
+  # AWS Cognito Example
+  - name: "cognito"
+    url: "https://cognito-idp.{region}.amazonaws.com/{userPoolId}/.well-known/jwks.json"
+    refresh_interval: 3600
+    max_keys: 10
+    cache_duration: 900
+
+  # Custom IDP Example - shorter intervals for frequently rotating keys
   - name: "custom-idp"
     url: "https://idp.example.com/.well-known/jwks.json"
-    refresh_interval: 1800  # 30 minutes
+    refresh_interval: 1800  # 30 minutes - fetch more frequently
+    max_keys: 15  # Allow more keys if IDP rotates frequently
+    cache_duration: 600  # 10 minutes - shorter cache for fresh keys
+
+logging:
+  level: "info"  # debug, info, warn, error
+  format: "json"  # json (recommended for production) or text
+
+# Configuration Notes:
+#
+# refresh_interval: How often this service fetches from the IDP
+#   - Recommended: 3600 (1 hour) for stable IDPs
+#   - Lower (1800-300) if IDP rotates keys frequently
+#   - Higher (7200) if IDP is very stable and you want less load
+#
+# max_keys: Maximum keys to maintain per IDP
+#   - Standard: 10 (most IDPs use 2-5 keys)
+#   - Protects against memory exhaustion
+#   - Warning logged if IDP returns more keys
+#
+# cache_duration: How long clients should cache (in seconds)
+#   - Standard: 900 (15 minutes)
+#   - Balance between freshness and performance
+#   - Shorter (300-600) for high-security environments
+#   - Longer (1800-3600) for stable keys
+
 
 logging:
   level: "info"  # Options: debug, info, warn, error

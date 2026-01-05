@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-idp-caller/internal/config"
-	"github.com/go-idp-caller/internal/jwks"
+	"github.com/kiquetal/go-idp-caller/internal/config"
+	"github.com/kiquetal/go-idp-caller/internal/jwks"
 )
 
 type Server struct {
@@ -29,6 +29,9 @@ func New(cfg config.ServerConfig, manager *jwks.Manager, logger *slog.Logger) *S
 
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
+
+	// Standard OIDC endpoint - merged JWKS from all IDPs
+	mux.HandleFunc("/.well-known/jwks.json", s.handleGetMergedJWKS)
 
 	// API endpoints
 	mux.HandleFunc("/health", s.handleHealth)
@@ -72,6 +75,45 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) handleGetMergedJWKS(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	all := s.manager.GetAll()
+
+	// Merge all keys from all IDPs into a single array
+	mergedKeys := make([]jwks.JWK, 0)
+	minCacheDuration := 900 // Default 15 minutes
+	totalKeys := 0
+
+	for _, data := range all {
+		if data.JWKS != nil && len(data.JWKS.Keys) > 0 {
+			mergedKeys = append(mergedKeys, data.JWKS.Keys...)
+			totalKeys += data.KeyCount
+
+			// Use the minimum cache duration across all IDPs to be safe
+			if data.CacheDuration > 0 && data.CacheDuration < minCacheDuration {
+				minCacheDuration = data.CacheDuration
+			}
+		}
+	}
+
+	response := jwks.JWKS{
+		Keys: mergedKeys,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", minCacheDuration))
+	w.Header().Set("X-Total-Keys", fmt.Sprintf("%d", totalKeys))
+	w.Header().Set("X-IDP-Count", fmt.Sprintf("%d", len(all)))
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		s.logger.Error("Failed to encode merged JWKS response", "error", err)
+	}
+}
+
 func (s *Server) handleGetAllJWKS(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -105,13 +147,24 @@ func (s *Server) handleGetIDPJWKS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	keySet, exists := s.manager.GetJWKS(idpName)
+	data, exists := s.manager.Get(idpName)
 	if !exists {
 		http.Error(w, fmt.Sprintf("IDP '%s' not found", idpName), http.StatusNotFound)
 		return
 	}
 
+	keySet := data.JWKS
+	if keySet == nil {
+		http.Error(w, fmt.Sprintf("IDP '%s' has no keys", idpName), http.StatusNotFound)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", data.CacheDuration))
+	w.Header().Set("X-Key-Count", fmt.Sprintf("%d", data.KeyCount))
+	w.Header().Set("X-Max-Keys", fmt.Sprintf("%d", data.MaxKeys))
+	w.Header().Set("X-Last-Updated", data.LastUpdated.Format(time.RFC3339))
+
 	if err := json.NewEncoder(w).Encode(keySet); err != nil {
 		s.logger.Error("Failed to encode JWKS response", "error", err, "idp", idpName)
 	}

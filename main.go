@@ -8,9 +8,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-idp-caller/internal/config"
-	"github.com/go-idp-caller/internal/jwks"
-	"github.com/go-idp-caller/internal/server"
+	"github.com/kiquetal/go-idp-caller/internal/config"
+	"github.com/kiquetal/go-idp-caller/internal/jwks"
+	"github.com/kiquetal/go-idp-caller/internal/server"
 )
 
 func main() {

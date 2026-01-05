@@ -2,6 +2,8 @@
 
 A Go service that fetches and maintains JSON Web Key Sets (JWKS) from multiple Identity Providers (IDPs). It uses goroutines to keep the JWKS updated periodically and provides a REST API for consumption by API gateways like KrakenD.
 
+> **🚀 Quick Start:** New to this project? Check out [QUICKSTART.md](QUICKSTART.md) for a 5-minute setup guide!
+
 ## Features
 
 - ✅ Fetch JWKS from multiple IDP endpoints
@@ -9,12 +11,16 @@ A Go service that fetches and maintains JSON Web Key Sets (JWKS) from multiple I
 - ✅ Detailed logging with timestamps for each update
 - ✅ Track last update time and update count per IDP
 - ✅ REST API for retrieving JWKS
+- ✅ Merged JWKS endpoint combining all IDPs (JOSE JWT compatible)
+- ✅ **Per-IDP key limits (standard: 10 keys per IDP)**
+- ✅ **Independent cache control per IDP**
 - ✅ Health check endpoint
 - ✅ Status endpoint with metadata
 - ✅ Kubernetes ready with deployment manifests
 - ✅ KrakenD integration support
 - ✅ Graceful shutdown
 - ✅ Thread-safe concurrent access
+- ✅ **Memory protection against excessive keys**
 
 ## API Endpoints
 
@@ -24,17 +30,53 @@ GET /health
 ```
 Returns service health status.
 
-### Get All JWKS
+### Get Merged JWKS (All IDPs Combined) - **JOSE JWT Compatible**
+```bash
+GET /.well-known/jwks.json  # Standard OIDC endpoint (recommended)
+```
+**Returns all keys from all IDPs merged into a single array.** This is the standard OIDC Discovery endpoint format expected by JOSE JWT libraries, KrakenD, and most JWT validators.
+
+**Response format:**
+```json
+{
+  "keys": [
+    { "kid": "key1", "kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "AQAB" },
+    { "kid": "key2", "kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "AQAB", "x5c": ["..."] },
+    { "kid": "key3", "kty": "RSA", "alg": "RSA-OAEP", "use": "enc", "n": "...", "e": "AQAB" }
+  ]
+}
+```
+
+**Response Headers:**
+- `Cache-Control: public, max-age=900` (uses minimum cache duration from all IDPs)
+- `X-Total-Keys: 9` (total number of keys across all IDPs)
+- `X-IDP-Count: 3` (number of configured IDPs)
+
+### Get All JWKS (Separated by IDP)
 ```bash
 GET /jwks
 ```
-Returns JWKS from all configured IDPs.
+Returns JWKS from all configured IDPs as a map with IDP names as keys.
+
+**Response format:**
+```json
+{
+  "auth0": { "keys": [...] },
+  "okta": { "keys": [...] }
+}
+```
 
 ### Get IDP-Specific JWKS
 ```bash
 GET /jwks/{idp-name}
 ```
 Returns JWKS for a specific IDP (e.g., `/jwks/auth0`).
+
+**Response Headers:**
+- `Cache-Control: public, max-age=900` (IDP-specific cache duration)
+- `X-Key-Count: 3` (number of keys for this IDP)
+- `X-Max-Keys: 10` (configured maximum)
+- `X-Last-Updated: 2026-01-05T10:30:00Z` (last successful fetch)
 
 ### Get All IDP Status
 ```bash
@@ -64,23 +106,47 @@ server:
 idps:
   - name: "auth0"
     url: "https://YOUR_AUTH0_DOMAIN/.well-known/jwks.json"
-    refresh_interval: 3600  # seconds
+    refresh_interval: 3600  # seconds - how often to fetch from IDP
+    max_keys: 10            # maximum keys to maintain per IDP (standard: 10)
+    cache_duration: 900     # cache time in seconds (default: 900 = 15 min)
   - name: "okta"
     url: "https://YOUR_OKTA_DOMAIN/oauth2/default/v1/keys"
     refresh_interval: 3600
+    max_keys: 10
+    cache_duration: 900
   - name: "keycloak"
     url: "https://YOUR_KEYCLOAK_DOMAIN/auth/realms/YOUR_REALM/protocol/openid-connect/certs"
     refresh_interval: 3600
+    max_keys: 10
+    cache_duration: 900
 
 logging:
   level: "info"  # debug, info, warn, error
   format: "json"  # json or text
 ```
 
+### Configuration Parameters
+
+| Parameter | Description | Default | Recommended |
+|-----------|-------------|---------|-------------|
+| `name` | Unique IDP identifier | - | Short, descriptive |
+| `url` | JWKS endpoint URL | - | HTTPS only |
+| `refresh_interval` | Fetch interval (seconds) | - | 3600 (1 hour) |
+| `max_keys` | Maximum keys per IDP | 10 | 10 (standard) |
+| `cache_duration` | Cache time (seconds) | 900 | 900 (15 min) |
+
+**Why 10 keys?** Most IDPs maintain 2-5 active keys. 10 keys provides buffer for rotation while preventing memory abuse.
+
+**Understanding refresh_interval vs cache_duration:**
+- `refresh_interval`: How often YOUR SERVICE fetches from the IDP
+- `cache_duration`: How long YOUR CLIENTS cache data from your service
+- They are **independent** but work together
+- 📘 See [CACHE_VS_REFRESH_INTERVAL.md](CACHE_VS_REFRESH_INTERVAL.md) for complete explanation with timelines and examples
+
 ## Local Development
 
 ### Prerequisites
-- Go 1.22 or later
+- Go 1.24 or later
 
 ### Run Locally
 ```bash
@@ -145,8 +211,9 @@ kubectl port-forward svc/idp-caller 8080:80
 
 ## KrakenD Integration
 
-The service is designed to work seamlessly with KrakenD for JWT validation. Configure KrakenD to use the service as the JWKS source:
+The service is designed to work seamlessly with KrakenD for JWT validation. Configure KrakenD to use the standard OIDC endpoint:
 
+**Option 1: Single IDP via standard endpoint (Recommended)**
 ```json
 {
   "endpoint": "/api/protected",
@@ -161,6 +228,23 @@ The service is designed to work seamlessly with KrakenD for JWT validation. Conf
 }
 ```
 
+**Option 2: All IDPs merged (Multi-IDP support)**
+```json
+{
+  "endpoint": "/api/protected",
+  "extra_config": {
+    "auth/validator": {
+      "alg": "RS256",
+      "jwk_url": "http://idp-caller.default.svc.cluster.local/.well-known/jwks.json",
+      "cache": true,
+      "cache_duration": 900
+    }
+  }
+}
+```
+
+This allows JWTs from any configured IDP (Auth0, Okta, Keycloak, etc.) to be validated.
+
 See `k8s/krakend-integration.yaml` for more examples.
 
 ## Logging
@@ -168,11 +252,13 @@ See `k8s/krakend-integration.yaml` for more examples.
 The service logs all important events in JSON format (configurable):
 
 - Service startup and shutdown
-- JWKS update attempts
-- Update successes with key count
+- JWKS update attempts with goroutine per IDP
+- Update successes with key count and metadata
+- Key truncation warnings when exceeding max_keys
 - Update failures with error details
-- HTTP requests with timing
+- HTTP requests with timing and status codes
 - Last update timestamp for each IDP
+- Cache metadata (cache_until, cache_duration)
 
 Example log output:
 ```json
@@ -181,9 +267,24 @@ Example log output:
   "level": "INFO",
   "msg": "Successfully updated JWKS",
   "idp": "auth0",
-  "keys_count": 2,
+  "key_count": 3,
+  "max_keys": 10,
+  "cache_duration": 900,
+  "cache_until": "2026-01-05T10:45:00Z",
   "last_updated": "2026-01-05T10:30:00Z",
   "update_count": 15
+}
+```
+
+**Warning for key limits:**
+```json
+{
+  "time": "2026-01-05T10:30:00Z",
+  "level": "WARN",
+  "msg": "Truncating keys to max limit",
+  "idp": "auth0",
+  "original_count": 25,
+  "max_keys": 10
 }
 ```
 
@@ -199,6 +300,11 @@ Each IDP has its own goroutine that:
 2. Updates periodically based on `refresh_interval`
 3. Logs all operations with timestamps
 4. Tracks update count and errors
+5. **NEW:** Reads IDP's `Cache-Control` headers to optimize caching dynamically
+
+**📘 Caching Details:** See [CACHING_STRATEGY.md](CACHING_STRATEGY.md) for complete information on how the two-level caching system works.
+
+**🔄 Goroutines & Cache Optimization:** See [INDEPENDENT_GOROUTINES_CACHE.md](INDEPENDENT_GOROUTINES_CACHE.md) to understand how each IDP's independent goroutine works with different intervals and how the system uses IDP's `max-age` headers to optimize caching.
 
 ## Monitoring
 
