@@ -76,19 +76,36 @@ jobs:
           cache-to: type=gha,mode=max,scope=arm64
           provenance: false
 
+      - name: Verify images pushed
+        run: |
+          echo "AMD64 Image Digest: ${{ steps.build-amd64.outputs.digest }}"
+          echo "ARM64 Image Digest: ${{ steps.build-arm64.outputs.digest }}"
+
       - name: Create and push multi-arch manifest
         run: |
           # Wait a bit to ensure images are fully available in registry
-          sleep 5
+          sleep 10
+          
+          echo "Creating multi-arch manifests..."
           
           # Create latest manifest
+          echo "Creating latest manifest..."
           docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64 \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64
           
           # Create timestamp manifest
+          echo "Creating timestamp manifest..."
           docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.datetime }} \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.datetime }}-amd64 \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.datetime }}-arm64
+          
+          echo "All tags created:"
+          echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest (multi-arch)"
+          echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64"
+          echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64"
+          echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.datetime }} (multi-arch)"
+          echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.datetime }}-amd64"
+          echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.datetime }}-arm64"
 
 
