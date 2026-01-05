@@ -8,7 +8,7 @@ idp-caller
 
 # Test binary
 *.test
-
+.config.yaml
 # Output of the go coverage tool
 *.out
 
