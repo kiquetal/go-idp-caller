@@ -24,7 +24,7 @@ WORKDIR /app
 COPY --from=builder /app/idp-caller .
 
 # Copy config (can be overridden by ConfigMap in k8s)
-COPY config.yaml .
+COPY config.example.yaml .
 
 EXPOSE 8080
 
