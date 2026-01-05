@@ -11,14 +11,14 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o idp-caller .
+RUN CGO_ENABLED=0 GOOS=linux go build -o idp-caller .
 
 # Runtime stage
 FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /root/
+WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /app/idp-caller .
