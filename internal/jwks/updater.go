@@ -81,34 +81,31 @@ func (u *Updater) determineCacheDuration(idpMaxAge int) int {
 		return configDuration
 	}
 
-	// Use the MAXIMUM of IDP's suggestion and config
-	// This ensures we respect our minimum freshness requirements
-	// If IDP says cache for 1 hour but we want 15 min freshness, use 15 min
-	// If IDP says cache for 5 min but we configured 15 min, use 15 min (IDP knows best about rotation)
+	// Always use the MAXIMUM of IDP's suggestion and config to ensure minimum cache duration
+	// This prevents IDPs with very short cache times from causing excessive refreshes
+	// Our config represents our minimum desired cache duration
 
 	if idpMaxAge < configDuration {
-		// IDP suggests shorter cache - they rotate keys more frequently
-		// Use IDP's suggestion to ensure we get fresh keys
-		u.logger.Info("Using IDP's shorter cache duration (IDP rotates keys faster)",
+		// IDP suggests shorter cache - but we enforce our minimum
+		u.logger.Info("IDP suggests shorter cache, using config minimum",
 			"idp", u.config.Name,
 			"idp_max_age", idpMaxAge,
 			"config_duration", configDuration,
-			"using", idpMaxAge,
-			"reason", "IDP rotates keys more frequently",
+			"using", configDuration,
+			"reason", "config sets minimum cache duration",
 		)
-		return idpMaxAge
+		return configDuration
 	}
 
-	// IDP suggests longer cache - but we want fresher data
-	// Use our config duration to ensure clients get updates more frequently
-	u.logger.Info("Using config cache duration (more conservative than IDP)",
+	// IDP suggests longer cache - honor their suggestion as they know their rotation schedule
+	u.logger.Info("Using IDP's longer cache duration",
 		"idp", u.config.Name,
 		"idp_max_age", idpMaxAge,
 		"config_duration", configDuration,
-		"using", configDuration,
-		"reason", "config requires fresher data than IDP suggests",
+		"using", idpMaxAge,
+		"reason", "IDP suggests longer cache than config minimum",
 	)
-	return configDuration
+	return idpMaxAge
 }
 
 // fetch retrieves JWKS from the IDP endpoint and returns the data plus cache duration from headers

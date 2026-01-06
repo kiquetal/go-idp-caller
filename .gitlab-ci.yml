@@ -1,0 +1,75 @@
+stages:
+  - build
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+  REGISTRY: ${CI_REGISTRY}
+  IMAGE_NAME: ${CI_REGISTRY_IMAGE}
+
+# Build and push AMD64 image
+build:
+  stage: build
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  before_script:
+    - echo ${CI_REGISTRY_PASSWORD} | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
+  script:
+    - |
+      echo "Building AMD64 Docker image..."
+      echo "Image: ${IMAGE_NAME}:latest"
+      
+      docker build \
+        --tag ${IMAGE_NAME}:latest \
+        --tag ${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA} \
+        .
+      
+      echo "Pushing images to registry..."
+      docker push ${IMAGE_NAME}:latest
+      docker push ${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}
+      
+      echo ""
+      echo "✅ Image published successfully!"
+      echo "   - ${IMAGE_NAME}:latest"
+      echo "   - ${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
+      echo ""
+      echo "Pull with: docker pull ${IMAGE_NAME}:latest"
+  tags:
+    - docker
+  only:
+    - main
+    - master
+    - tags
+
+# Create version tag for git tags
+build-version:
+  stage: build
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  before_script:
+    - echo ${CI_REGISTRY_PASSWORD} | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
+  script:
+    - |
+      VERSION=${CI_COMMIT_TAG#v}
+      
+      echo "Building version ${VERSION}..."
+      
+      docker build \
+        --tag ${IMAGE_NAME}:${VERSION} \
+        --tag ${IMAGE_NAME}:latest \
+        .
+      
+      docker push ${IMAGE_NAME}:${VERSION}
+      docker push ${IMAGE_NAME}:latest
+      
+      echo ""
+      echo "✅ Version ${VERSION} published!"
+      echo "   - ${IMAGE_NAME}:${VERSION}"
+      echo "   - ${IMAGE_NAME}:latest"
+  tags:
+    - docker
+  only:
+    - tags
+
